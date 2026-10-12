@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WeaveSilk · 镜像对称光绘</title>
+<style>
+  :root{
+    --panel:rgba(16,18,22,.86);
+    --line:rgba(255,255,255,.13);
+    --dim:rgba(255,255,255,.46);
+    --ink:#e8ebef;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:#06070a;color:var(--ink);overflow:hidden;
+    font-family:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  }
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #stage{
+    position:relative;width:100%;height:600px;overflow:hidden;
+    background:#06070a;cursor:crosshair;touch-action:none;
+  }
+  #cv{display:block;width:100%;height:100%}
+
+  /* ---------- 控制面板 ---------- */
+  #panel{
+    position:fixed;top:16px;right:16px;width:274px;z-index:20;
+    background:var(--panel);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+    border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.55);
+    font-size:12px;max-height:calc(100vh - 32px);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  #panel header{
+    display:flex;align-items:center;gap:8px;
+    padding:11px 13px;border-bottom:1px solid var(--line);flex:0 0 auto;
+  }
+  #panel header b{font-weight:600;letter-spacing:.02em;flex:1;font-size:12.5px}
+  #panel header .tag{
+    font-size:10px;color:var(--dim);border:1px solid var(--line);
+    padding:1px 6px;border-radius:99px;
+  }
+  #panel header button{
+    appearance:none;border:1px solid var(--line);background:transparent;color:var(--dim);
+    width:20px;height:20px;line-height:1;border-radius:6px;cursor:pointer;font-size:12px;
+    display:grid;place-items:center;padding:0;
+  }
+  #panel header button:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+  #controls{padding:12px 13px 6px;overflow-y:auto;overflow-x:hidden}
+  #panel.collapsed #controls,#panel.collapsed footer{display:none}
+
+  .row{
+    display:grid;grid-template-columns:68px 1fr 42px;
+    align-items:center;gap:8px;margin-bottom:9px;
+  }
+  .row>span{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row>em{
+    font-style:normal;text-align:right;color:#fff;opacity:.85;
+    font-size:10.5px;font-variant-numeric:tabular-nums;
+  }
+  .row.two{grid-template-columns:68px 1fr}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:99px;
+    background:rgba(255,255,255,.16);outline:none;cursor:pointer;accent-color:#fff;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:11px;height:11px;border-radius:50%;
+    background:#fff;border:none;box-shadow:0 0 0 3px rgba(255,255,255,.13);
+  }
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:#fff;border:none}
+  input[type=color]{
+    -webkit-appearance:none;appearance:none;border:1px solid var(--line);
+    background:transparent;width:100%;height:22px;border-radius:7px;padding:1px;cursor:pointer;
+  }
+  input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  input[type=color]::-webkit-color-swatch{border:none;border-radius:5px}
+  .sw{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:5px 0;color:var(--dim);font-size:11px;cursor:pointer;
+  }
+  .sw input{display:none}
+  .sw i{
+    width:26px;height:15px;border-radius:99px;background:rgba(255,255,255,.14);
+    position:relative;transition:.18s;flex:0 0 auto;
+  }
+  .sw i::after{
+    content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;
+    background:#8c939c;transition:.18s;
+  }
+  .sw input:checked+i{background:rgba(255,255,255,.9)}
+  .sw input:checked+i::after{transform:translateX(11px);background:#0a0b0d}
+  .ctlbtn{
+    width:100%;appearance:none;
+    border:1px solid rgba(255,255,255,.22);
+    background:rgba(255,255,255,.06);color:#fff;
+    border-radius:8px;padding:5px;font-family:inherit;font-size:11px;
+    cursor:pointer;transition:background .12s,color .12s;
+    -webkit-user-select:none;user-select:none;touch-action:none;
+  }
+  .ctlbtn:hover{background:rgba(255,255,255,.12)}
+  .ctlbtn.on{background:rgba(255,255,255,.92);color:#0a0b0d;font-weight:600}
+  hr.sep{border:none;border-top:1px solid var(--line);margin:12px 0 10px}
+  #panel footer{padding:0 13px 12px;flex:0 0 auto;display:grid;gap:7px}
+  #panel footer button{
+    width:100%;appearance:none;background:rgba(255,255,255,.055);color:var(--dim);
+    border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px;
+    font-family:inherit;cursor:pointer;letter-spacing:.03em;
+  }
+  #panel footer button:hover{color:#fff;background:rgba(255,255,255,.1)}
+  #panel footer button.primary{background:rgba(255,255,255,.9);color:#0a0b0d;border-color:transparent;font-weight:600}
+  #panel footer button.primary:hover{background:#fff}
+
+  #hint{
+    position:fixed;left:0;right:0;bottom:14px;text-align:center;
+    font-size:11px;color:rgba(255,255,255,.3);letter-spacing:.05em;pointer-events:none;z-index:5;
+  }
+  #stats{
+    position:fixed;left:16px;bottom:14px;font-size:10.5px;
+    color:rgba(255,255,255,.26);letter-spacing:.04em;pointer-events:none;z-index:5;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ================= 移动端适配 (mobile-adapt-v1) ================= */
+  @media (max-width: 820px){
+    /* 画布吃满整个视口，并接管触摸手势（几个页面都是全屏交互画布，不需要页面滚动） */
+    #stage{
+      height: 100vh;
+      height: 100dvh;
+      touch-action: none;
+    }
+    /* 底部提示在窄屏会换行挡内容，直接隐藏 */
+    #hint{ display: none; }
+    /* 诊断信息移到顶部，抽屉展开时也能看到 */
+    #stats{
+      top: 10px;
+      bottom: auto;
+      left: 12px;
+      right: 12px;
+      font-size: 9.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* 控制面板改造成底部抽屉：默认只露出顶部 50px */
+    #panel{
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 64vh;
+      height: 64dvh;
+      max-height: none;
+      border-radius: 16px 16px 0 0;
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
+      transform: translateY(calc(100% - 50px));
+      transition: transform .3s cubic-bezier(.22,1,.36,1);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    #panel.open{ transform: translateY(0); }
+    #panel header{
+      position: relative;
+      padding-top: 17px;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    /* 抽屉把手 */
+    #panel header::before{
+      content: '';
+      position: absolute;
+      top: 7px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 4px;
+      border-radius: 99px;
+      background: rgba(255,255,255,.22);
+    }
+  }
+
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+  </div>
+</div>
+
+<aside id="panel">
+  <header>
+    <b>WeaveSilk</b>
+    <span class="tag">镜像光绘</span>
+    <button id="collapse" title="折叠">−</button>
+  </header>
+  <div id="controls"></div>
+  <footer>
+    <button id="clear" class="primary">清空画布</button>
+    <button id="reset">恢复默认参数</button>
+  </footer>
+</aside>
+
+<div id="hint">按住鼠标拖动即可绘制 · 轨迹按对称轴自动镜像复制 · 画上的丝线会永久保留，想让它们消散就按住面板里的「淡出」</div>
+<div id="stats"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ================= 参数 ================= */
+  const DEFAULTS = {
+    symmetry: 6,       // 对称轴数量
+    width: 1.6,        // 笔触粗细
+    glow: 0.9,         // 辉光强度
+    hue: 205,          // 起始色相
+    hueSpeed: 0.35,    // 色相流转速度
+    fade: 0.42,        // 按住「淡出」按钮时的渐隐速率
+    sat: 82,           // 饱和度
+    light: 58,         // 明度
+    bg: '#06070a',     // 背景色
+    auto: false,       // 自动绘制（默认关：画的东西不再自动消失，自动演示会不断堆叠）
+    freehand: false    // 免按绘制（移动即画）
+  };
+  const CFG = Object.assign({}, DEFAULTS);
+
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('cv');
+  const statsEl = document.getElementById('stats');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  let W = 1, H = 1, dpr = 1;
+  let hue = CFG.hue;
+  let last = null;
+  const queue = [];
+  const pointer = { x: 0, y: 0, down: false, inside: false, inPanel: false };
+  let autoPhase = 0;
+  let fadeHold = false;   // 是否正按住「淡出」按钮
+  let raf = 0;
+  let alive = true;
+  let fpsAcc = 0, fpsCount = 0, fpsShown = 0;
+  let lastTime = 0;
+
+  const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+
+  function bgRGB(){
+    const hex = CFG.bg.replace('#', '');
+    const n = parseInt(hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  /* ================= 画布尺寸 ================= */
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, stage.clientWidth);
+    H = Math.max(1, stage.clientHeight);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    clear();
+  }
+
+  function clear(){
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = CFG.bg;
+    ctx.fillRect(0, 0, W, H);
+    last = null;
+    queue.length = 0;
+  }
+
+  /* ================= 绘制 ================= */
+  // 把一段线段按 N 重镜像对称复制，再分三层描边模拟辉光
+  function stamp(x0, y0, x1, y1, h){
+    const cx = W / 2, cy = H / 2;
+    const sym = Math.max(1, Math.round(CFG.symmetry));
+    const pts = [];
+
+    for (let i = 0; i < sym; i++){
+      const a = (i * Math.PI * 2) / sym;
+      const cos = Math.cos(a), sin = Math.sin(a);
+      for (let m = 0; m < 2; m++){
+        const flip = m === 0 ? 1 : -1;
+        const ax = (x0 - cx) * flip, ay = y0 - cy;
+        const bx = (x1 - cx) * flip, by = y1 - cy;
+        pts.push(
+          cx + ax * cos - ay * sin, cy + ax * sin + ay * cos,
+          cx + bx * cos - by * sin, cy + bx * sin + by * cos
+        );
+      }
+    }
+
+    const w = Math.max(0.2, CFG.width);
+    const glow = Math.max(0, CFG.glow);
+    const passes = [
+      { lw: w * 6.0,  a: 0.035 * glow, l: CFG.light },
+      { lw: w * 3.0,  a: 0.075 * glow, l: CFG.light + 6 },
+      { lw: w * 1.45, a: 0.20  * glow, l: CFG.light + 12 },
+      { lw: w,        a: 0.72,         l: Math.min(96, CFG.light + 24) }
+    ];
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of passes){
+      if (p.a <= 0.002) continue;
+      ctx.beginPath();
+      for (let k = 0; k < pts.length; k += 4){
+        ctx.moveTo(pts[k], pts[k + 1]);
+        ctx.lineTo(pts[k + 2], pts[k + 3]);
+      }
+      ctx.lineWidth = p.lw;
+      ctx.strokeStyle = `hsla(${h}, ${CFG.sat}%, ${clamp(p.l, 0, 100)}%, ${p.a})`;
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function fade(dt){
+    if (CFG.fade <= 0) return;
+    const [r, g, b] = bgRGB();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${clamp(CFG.fade * dt * 3.2, 0, 1)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  /* ================= 主循环 ================= */
+  function frame(now){
+    if (!alive) return;
+    const dt = lastTime ? Math.min(0.05, (now - lastTime) / 1000) : 1 / 60;
+    lastTime = now;
+
+    // 只有按住「淡出」按钮时才渐隐，其余时间画上去的丝线永久保留
+    if (fadeHold) fade(dt);
+    hue = (hue + CFG.hueSpeed * dt * 60 + 3600) % 360;
+
+    if (CFG.auto){
+      autoPhase += dt;
+      const t = autoPhase;
+      const nx = W / 2 + Math.sin(t * 0.62) * W * 0.20 + Math.sin(t * 1.71 + 1.1) * W * 0.07 + Math.cos(t * 0.29) * W * 0.05;
+      const ny = H / 2 + Math.cos(t * 0.47) * H * 0.20 + Math.cos(t * 1.33 + 0.4) * H * 0.07 + Math.sin(t * 0.23) * H * 0.05;
+      queue.push({ x: nx, y: ny });
+    }
+
+    // 消费轨迹点（一帧内的多个 pointermove 合并到此）
+    const take = Math.min(queue.length, 40);
+    for (let i = 0; i < take; i++){
+      const p = queue.shift();
+      if (last) stamp(last.x, last.y, p.x, p.y, hue);
+      last = p;
+    }
+    if (take === 0) last = null;
+
+    fpsAcc += dt; fpsCount++;
+    if (fpsAcc > 0.5){
+      fpsShown = Math.round(fpsCount / fpsAcc);
+      fpsAcc = 0; fpsCount = 0;
+      statsEl.textContent = `${Math.round(W)}×${Math.round(H)} · 倍率 ${dpr.toFixed(2)} · ${fpsShown} FPS · 对称 ${Math.round(CFG.symmetry)} 重 · 色相 ${Math.round(hue)}°`;
+    }
+
+    raf = requestAnimationFrame(frame);
+  }
+
+  /* ================= 交互 ================= */
+  const inPanel = e => {
+    const t = e.target;
+    return !!(t && t.closest && t.closest('#panel'));
+  };
+
+  function push(e){
+    const r = stage.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    if (x < 0 || y < 0 || x > r.width || y > r.height) return;
+    queue.push({ x, y });
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    if (inPanel(e)) return;
+    pointer.down = true;
+    last = null;
+    push(e);
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+
+  stage.addEventListener('pointermove', e => {
+    if (inPanel(e)) return;
+    if (CFG.freehand || pointer.down) push(e);
+  });
+
+  const release = () => { pointer.down = false; last = null; };
+  stage.addEventListener('pointerup', release);
+  stage.addEventListener('pointercancel', release);
+  stage.addEventListener('pointerleave', release);
+  window.addEventListener('blur', release);
+  stage.addEventListener('contextmenu', e => e.preventDefault());
+
+  new ResizeObserver(() => resize()).observe(stage);
+
+  /* ================= 控制面板 ================= */
+  const CONTROLS = [
+    { k:'symmetry', t:'range', label:'对称数量', en:'symmetry', min:1,  max:8,   step:1 },
+    { k:'width',    t:'range', label:'笔触粗细', en:'width',    min:0.4,max:8,   step:0.2 },
+    { k:'glow',     t:'range', label:'辉光强度', en:'glow',     min:0,  max:2,   step:0.05 },
+    { k:'__s1', t:'sep' },
+    { k:'hue',      t:'range', label:'起始色相', en:'hue',      min:0,  max:360, step:1 },
+    { k:'hueSpeed', t:'range', label:'色相流转', en:'hueSpeed', min:0,  max:3,   step:0.05 },
+    { k:'sat',      t:'range', label:'饱和度',   en:'sat',      min:0,  max:100, step:1 },
+    { k:'light',    t:'range', label:'明度',     en:'light',    min:10, max:80,  step:1 },
+    { k:'__s2', t:'sep' },
+    { k:'fade',     t:'button', label:'淡出',   en:'fade', hold:'按住渐隐' },
+    { k:'bg',       t:'color', label:'背景颜色', en:'bg' },
+    { k:'__s3', t:'sep' },
+    { k:'auto',     t:'toggle', label:'自动绘制', en:'auto' },
+    { k:'freehand', t:'toggle', label:'免按绘制', en:'freehand' }
+  ];
+
+  function syncFromHue(){ hue = CFG.hue; }
+
+  function buildPanel(){
+    const box = document.getElementById('controls');
+    box.textContent = '';
+    CONTROLS.forEach(c => {
+      if (c.t === 'sep'){
+        const hr = document.createElement('hr'); hr.className = 'sep'; box.appendChild(hr); return;
+      }
+      if (c.t === 'toggle'){
+        const lab = document.createElement('label'); lab.className = 'sw';
+        const sp = document.createElement('span'); sp.textContent = c.label; sp.title = c.en;
+        const inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = !!CFG[c.k];
+        const ii = document.createElement('i');
+        lab.append(sp, inp, ii);
+        inp.addEventListener('change', () => {
+          CFG[c.k] = inp.checked;
+          if (c.k === 'auto' && inp.checked) last = null;
+        });
+        box.appendChild(lab);
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = 'row' + (c.t === 'range' ? '' : ' two');
+      const sp = document.createElement('span'); sp.textContent = c.label; sp.title = c.en;
+      row.appendChild(sp);
+
+      if (c.t === 'range'){
+        const inp = document.createElement('input');
+        inp.type = 'range'; inp.min = c.min; inp.max = c.max; inp.step = c.step; inp.value = CFG[c.k];
+        const em = document.createElement('em'); em.textContent = CFG[c.k];
+        inp.addEventListener('input', () => {
+          CFG[c.k] = parseFloat(inp.value);
+          em.textContent = inp.value;
+          if (c.k === 'hue') syncFromHue();
+        });
+        row.append(inp, em);
+      } else if (c.t === 'color'){
+        const inp = document.createElement('input');
+        inp.type = 'color'; inp.value = CFG[c.k];
+        inp.addEventListener('input', () => { CFG[c.k] = inp.value; });
+        row.appendChild(inp);
+      } else if (c.t === 'button'){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ctlbtn';
+        btn.textContent = c.hold || '按住';
+        const stop = () => { fadeHold = false; btn.classList.remove('on'); };
+        btn.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          fadeHold = true;
+          btn.classList.add('on');
+        });
+        btn.addEventListener('pointerleave', stop);
+        window.addEventListener('pointerup', stop);
+        window.addEventListener('pointercancel', stop);
+        row.appendChild(btn);
+      }
+      box.appendChild(row);
+    });
+  }
+
+  document.getElementById('clear').addEventListener('click', clear);
+  document.getElementById('reset').addEventListener('click', () => {
+    Object.assign(CFG, DEFAULTS);
+    buildPanel();
+    syncFromHue();
+    clear();
+  });
+
+  let collapsed = false;
+  document.getElementById('collapse').addEventListener('click', () => {
+    collapsed = !collapsed;
+    document.getElementById('panel').classList.toggle('collapsed', collapsed);
+    document.getElementById('collapse').textContent = collapsed ? '+' : '−';
+  });
+
+  /* ================= 启动 ================= */
+  buildPanel();
+  resize();
+  hue = CFG.hue;
+  raf = requestAnimationFrame(frame);
+
+  window.addEventListener('beforeunload', () => { alive = false; cancelAnimationFrame(raf); });
+})();
+
+  /* ================= 移动端：点面板标题栏展开/收起抽屉 (mobile-adapt-v1) ================= */
+  (function(){
+    var panel = document.getElementById('panel');
+    if (!panel) return;
+    var header = panel.querySelector('header');
+    if (!header) return;
+    header.addEventListener('click', function(e){
+      // 别抢走「折叠」按钮的点击
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      panel.classList.toggle('open');
+    });
+  })();
+
+</script>
+</body>
+</html>
